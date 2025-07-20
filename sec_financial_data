@@ -1,0 +1,149 @@
+
+--changing names to make more sense as well as making a market cap size column
+CREATE OR REPLACE VIEW `portfolioprojects-457720.SEC_quarterly.sp500_data_2` AS 
+SELECT 
+  `Symbol` AS ticker,
+  `Sector` AS sector,
+  `Name` AS name,
+  `Price` AS price,
+  `Price Earnings` AS pe,
+  `Dividend Yield` AS div_yield,
+  `Earnings Share` AS eps,
+  `Market Cap` AS mkt_cap,
+  `EBITDA` AS ebitda,
+  `Price Book` AS pb,
+  `SEC filings` AS sec_filings,
+  `52 Week Low` AS low_52wk,
+  `52 Week High` AS high_52wk,
+ CASE
+  WHEN `Market Cap` < 10*1e9 THEN 'Small'
+  WHEN `Market Cap` < 50*1e9 THEN 'Medium'
+  WHEN `Market Cap` < 200*1e9 THEN 'Large'
+  ELSE 'Extra_Large'
+END AS market_cap_bin
+FROM `portfolioprojects-457720.SEC_quarterly.sp500_data`;
+
+--testing
+
+SELECT * 
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2;
+
+
+--looking at difference in market cap based on sectors, 
+
+
+SELECT sector, 
+count(ticker) AS amount, 
+market_cap_bin
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+GROUP BY sector, market_cap_bin
+ORDER BY sector, market_cap_bin;
+
+-- Looking at top companies within each sector by market cap, as well as PE 
+ 
+WITH mkt_cap_rank AS (SELECT name,
+sector,
+RANK() OVER(PARTITION BY sector ORDER BY mkt_cap) AS ranking
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2)
+SELECT *
+
+FROM mkt_cap_rank
+PIVOT(
+MAX(name) FOR ranking IN (1 AS first, 2 AS second, 3 AS third)
+
+);
+
+--PE rankings, I also used the where function in order to make sure that any negative PE's werent showing up in the ranking for highest PE.
+-- Naturally certain industries had higher PE's, ones that expect large growth like Salesforce. This is old data and its PE is down to 40
+
+WITH pe_rank AS (SELECT name,
+ticker,
+sector, 
+pe,
+RANK() OVER(PARTITION BY sector ORDER BY pe DESC)  AS ranking
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+WHERE pe > 0 )
+SELECT *
+
+FROM pe_rank
+WHERE ranking <=3;
+
+--correlation analysis 
+
+--EPS PE corr
+--I found that correlation in some cases of EPS and PE ratio can in fact be negative. I am sure that there are many factors as to why this is true
+SELECT sector,
+CORR(eps,pe) AS correlation,
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+GROUP BY sector;
+--EPS, price corr
+-- with this i am trying to show the average beta of each sector in comparison to their price to EPS correlation
+-- I have seen a strong correlation with certain industries, like telecomms and IT, this is probably due to the reactive nature. Doing some research alongside beta in python would be useful
+SELECT sector,
+CORR(price,eps) AS correlation_price_eps
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+GROUP BY sector;
+-- stock screening
+--Creating a stock screener that only looks for stocks that has a pe 2 SDs away from the industry mean, showing
+SELECT *
+FROM 
+(
+WITH pe_avs AS (
+SELECT sector,
+AVG(pe) AS average_pe,
+STDDEV(pe) AS pe_stdev
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+GROUP BY sector
+)
+SELECT a.sector,
+a.ticker,
+b.average_pe,
+a.pe,
+(a.pe-b.average_pe)/ b.pe_stdev AS z_score
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2 a
+JOIN pe_avs b ON b.sector = a.sector
+)subquery
+WHERE (z_score >=2 OR z_score <=-2)
+AND sector = 'Consumer Staples';
+
+---finding the covariances for various factors
+SELECT
+  'price_vs_pe' AS pair,
+  CORR(price, pe) AS correlation
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+
+UNION ALL
+
+SELECT
+  'price_vs_eps' AS pair,
+  CORR(price, eps) AS correlation
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+
+UNION ALL
+
+SELECT
+  'price_vs_div_yield' AS pair,
+  CORR(price, div_yield) AS correlation
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+
+UNION ALL
+
+SELECT
+  'pe_vs_eps' AS pair,
+  CORR(pe, eps) AS correlation
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+
+UNION ALL
+
+SELECT
+  'pe_vs_div_yield' AS pair,
+  CORR(pe, div_yield) AS correlation
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2
+
+UNION ALL
+
+SELECT
+  'eps_vs_div_yield' AS pair,
+  CORR(eps, div_yield) AS correlation
+FROM portfolioprojects-457720.SEC_quarterly.sp500_data_2;
+
