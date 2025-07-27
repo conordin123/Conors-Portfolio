@@ -23,14 +23,14 @@ WITH duplicate_cte AS (
 SELECT *,
 ROW_NUMBER() OVER(
   PARTITION BY company, industry, total_laid_off, percentage_laid_off, date, stage, country, raised_funds_millions) AS row_num
-  FROM portfolioprojects-457720.Layoffs.Layoffs_Staging
+  FROM Layoffs
 )
 SELECT * 
 FROM duplicate_cte
 WHERE row_num > 1 
 --Checking Casper to see if there is a duplicate
 SELECT *
-FROM portfolioprojects-457720.Layoffs.Layoffs_Staging
+FROM Layoffs
 WHERE company = 'Casper'
 
 
@@ -39,22 +39,21 @@ WITH duplicate_cte AS (
 SELECT *,
 ROW_NUMBER() OVER(
   PARTITION BY company, industry, total_laid_off, percentage_laid_off, date, stage, country, raised_funds_millions) AS row_num
-  FROM portfolioprojects-457720.Layoffs.Layoffs_Staging
+  FROM Layoffs
 )
 SELECT * 
 FROM duplicate_cte
 
 -- Uploaded new table and removed any instances where there are duplicates
 SELECT *
-FROM portfolioprojects-457720.Layoffs.Layoffs_2_with_row_num 
+FROM Layoffs
 WHERE row_num = 1
 
 --STANDARDISING DATA
 SELECT company, TRIM(company)
 FROM Layoffs 
 
-UPDATE portfolioprojects-457720.Layoffs.Layoffs_3_without_duplicates
-
+UPDATE Layoffs
 SET company = TRIM(company)
 
 
